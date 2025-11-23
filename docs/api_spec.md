@@ -1,15 +1,18 @@
-# API設計書 - CleanFlow Agent
+# API 設計書 - CleanFlow Agent
 
 ## 基本情報
 
 ### Base URL
+
 ```
 /api/v1
 ```
 
 ### 認証方式
+
 - JWT（JSON Web Token）
-- AuthorizationヘッダにBearerトークンを含める
+- Authorization ヘッダに Bearer トークンを含める
+
 ```
 Authorization: Bearer <access_token>
 ```
@@ -17,6 +20,7 @@ Authorization: Bearer <access_token>
 ### 共通レスポンス形式
 
 #### 成功レスポンス
+
 ```json
 {
   "data": { ... },
@@ -25,6 +29,7 @@ Authorization: Bearer <access_token>
 ```
 
 #### エラーレスポンス
+
 ```json
 {
   "error": {
@@ -34,7 +39,8 @@ Authorization: Bearer <access_token>
 }
 ```
 
-### HTTPステータスコード
+### HTTP ステータスコード
+
 - `200`: 成功
 - `201`: 作成成功
 - `400`: バリデーションエラー
@@ -46,9 +52,11 @@ Authorization: Bearer <access_token>
 ## 認証関連エンドポイント
 
 ### POST /auth/register
+
 ユーザー新規登録
 
 #### リクエスト
+
 ```json
 {
   "email": "user@example.com",
@@ -57,6 +65,7 @@ Authorization: Bearer <access_token>
 ```
 
 #### レスポンス（201 Created）
+
 ```json
 {
   "data": {
@@ -71,6 +80,7 @@ Authorization: Bearer <access_token>
 #### エラーレスポンス例
 
 **400 Bad Request - メール重複**
+
 ```json
 {
   "error": {
@@ -81,6 +91,7 @@ Authorization: Bearer <access_token>
 ```
 
 **400 Bad Request - パスワード強度不足**
+
 ```json
 {
   "error": {
@@ -91,9 +102,11 @@ Authorization: Bearer <access_token>
 ```
 
 ### POST /auth/login
-ログイン（JWTトークン取得）
+
+ログイン（JWT トークン取得）
 
 #### リクエスト
+
 ```json
 {
   "email": "user@example.com",
@@ -102,6 +115,7 @@ Authorization: Bearer <access_token>
 ```
 
 #### レスポンス（200 OK）
+
 ```json
 {
   "data": {
@@ -116,6 +130,7 @@ Authorization: Bearer <access_token>
 #### エラーレスポンス例
 
 **401 Unauthorized - 認証失敗**
+
 ```json
 {
   "error": {
@@ -126,14 +141,17 @@ Authorization: Bearer <access_token>
 ```
 
 ### GET /auth/me
+
 現在のユーザー情報取得
 
 #### リクエストヘッダ
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 #### レスポンス（200 OK）
+
 ```json
 {
   "data": {
@@ -148,6 +166,7 @@ Authorization: Bearer <access_token>
 #### エラーレスポンス例
 
 **401 Unauthorized - トークン無効**
+
 ```json
 {
   "error": {
@@ -160,9 +179,11 @@ Authorization: Bearer <access_token>
 ## データセット関連エンドポイント
 
 ### POST /datasets
-CSVファイルアップロード
+
+CSV ファイルアップロード
 
 #### リクエスト
+
 - Content-Type: `multipart/form-data`
 - 認証: 必須
 
@@ -172,6 +193,7 @@ name: "my_dataset" (オプション、デフォルトはファイル名)
 ```
 
 #### レスポンス（201 Created）
+
 ```json
 {
   "data": {
@@ -188,6 +210,7 @@ name: "my_dataset" (オプション、デフォルトはファイル名)
 #### エラーレスポンス例
 
 **400 Bad Request - ファイル形式エラー**
+
 ```json
 {
   "error": {
@@ -198,6 +221,7 @@ name: "my_dataset" (オプション、デフォルトはファイル名)
 ```
 
 **400 Bad Request - ファイルサイズ超過**
+
 ```json
 {
   "error": {
@@ -208,14 +232,17 @@ name: "my_dataset" (オプション、デフォルトはファイル名)
 ```
 
 ### GET /datasets
+
 データセット一覧取得
 
 #### リクエストヘッダ
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 #### レスポンス（200 OK）
+
 ```json
 {
   "data": {
@@ -235,14 +262,17 @@ Authorization: Bearer <access_token>
 ```
 
 ### GET /datasets/{dataset_id}
+
 データセット詳細取得
 
 #### リクエストヘッダ
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 #### レスポンス（200 OK）
+
 ```json
 {
   "data": {
@@ -260,6 +290,7 @@ Authorization: Bearer <access_token>
 #### エラーレスポンス例
 
 **404 Not Found**
+
 ```json
 {
   "error": {
@@ -270,6 +301,7 @@ Authorization: Bearer <access_token>
 ```
 
 **403 Forbidden**
+
 ```json
 {
   "error": {
@@ -280,14 +312,17 @@ Authorization: Bearer <access_token>
 ```
 
 ### GET /datasets/{dataset_id}/profile
+
 データプロファイル取得
 
 #### リクエストヘッダ
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 #### レスポンス（200 OK）
+
 ```json
 {
   "data": {
@@ -328,14 +363,17 @@ Authorization: Bearer <access_token>
 ```
 
 ### DELETE /datasets/{dataset_id}
+
 データセット削除
 
 #### リクエストヘッダ
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 #### レスポンス（200 OK）
+
 ```json
 {
   "data": {
@@ -348,14 +386,17 @@ Authorization: Bearer <access_token>
 ## 前処理プラン関連エンドポイント
 
 ### POST /datasets/{dataset_id}/plan
+
 前処理プラン生成
 
 #### リクエストヘッダ
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 #### リクエストボディ
+
 ```json
 {
   "task_type": "classification",
@@ -365,6 +406,7 @@ Authorization: Bearer <access_token>
 ```
 
 #### レスポンス（201 Created）
+
 ```json
 {
   "data": {
@@ -396,6 +438,7 @@ Authorization: Bearer <access_token>
 #### エラーレスポンス例
 
 **400 Bad Request - 無効なタスク種別**
+
 ```json
 {
   "error": {
@@ -406,6 +449,7 @@ Authorization: Bearer <access_token>
 ```
 
 **400 Bad Request - ターゲット列が見つからない**
+
 ```json
 {
   "error": {
@@ -415,7 +459,8 @@ Authorization: Bearer <access_token>
 }
 ```
 
-**500 Internal Server Error - LLM生成失敗**
+**500 Internal Server Error - LLM 生成失敗**
+
 ```json
 {
   "error": {
@@ -426,14 +471,17 @@ Authorization: Bearer <access_token>
 ```
 
 ### GET /plans/{plan_id}
+
 前処理プラン詳細取得
 
 #### リクエストヘッダ
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 #### レスポンス（200 OK）
+
 ```json
 {
   "data": {
@@ -457,14 +505,17 @@ Authorization: Bearer <access_token>
 ```
 
 ### GET /plans
+
 前処理プラン一覧取得
 
 #### リクエストヘッダ
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 #### レスポンス（200 OK）
+
 ```json
 {
   "data": {
@@ -484,14 +535,17 @@ Authorization: Bearer <access_token>
 ```
 
 ### POST /plans/{plan_id}/execute
+
 前処理プラン実行
 
 #### リクエストヘッダ
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 #### レスポンス（200 OK）
+
 ```json
 {
   "data": {
@@ -531,6 +585,7 @@ Authorization: Bearer <access_token>
 #### エラーレスポンス例
 
 **400 Bad Request - 実行エラー**
+
 ```json
 {
   "error": {
@@ -545,14 +600,17 @@ Authorization: Bearer <access_token>
 ```
 
 ### GET /executions/{execution_id}
+
 実行結果詳細取得
 
 #### リクエストヘッダ
+
 ```
 Authorization: Bearer <access_token>
 ```
 
 #### レスポンス（200 OK）
+
 ```json
 {
   "data": {
@@ -567,4 +625,3 @@ Authorization: Bearer <access_token>
   "message": "Success"
 }
 ```
-

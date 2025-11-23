@@ -1,0 +1,36 @@
+from pydantic import BaseModel
+from datetime import datetime
+from uuid import UUID
+from typing import Optional
+
+
+class DatasetSummary(BaseModel):
+    """データセットサマリ"""
+    dataset_id: UUID
+    name: str
+    rows: int
+    columns: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class DatasetDetail(BaseModel):
+    """データセット詳細"""
+    dataset_id: UUID
+    name: str
+    rows: int
+    columns: int
+    file_path: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class DatasetListResponse(BaseModel):
+    """データセット一覧レスポンス"""
+    datasets: list[DatasetSummary]
+    total: int
+
