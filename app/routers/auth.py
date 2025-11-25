@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -6,7 +7,7 @@ from app.models.user import User
 from app.schemas.auth import UserRegister, UserLogin, TokenResponse
 from app.schemas.user import UserResponse
 from app.core.security import get_current_user
-from app.services.auth_service import register_user, login_user
+from app.services.auth_service import register_user, login_user, authenticate_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -33,7 +34,7 @@ def login(
     login_data: UserLogin,
     db: Session = Depends(get_db)
 ):
-    """ログイン"""
+    """ログイン（JSON リクエスト用）"""
     token_response = login_user(db, login_data)
     return {
         "data": {
@@ -43,6 +44,17 @@ def login(
         },
         "message": "Login successful"
     }
+
+
+@router.post("/token", response_model=TokenResponse)
+def token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    """OAuth2 トークン取得（Swagger Authorize 用）"""
+    # form_data.username を email として扱う
+    token_response = authenticate_user(db, form_data.username, form_data.password)
+    return token_response
 
 
 @router.get("/me", response_model=dict)

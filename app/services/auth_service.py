@@ -58,10 +58,10 @@ def register_user(db: Session, user_data: UserRegister) -> UserResponse:
     )
 
 
-def login_user(db: Session, login_data: UserLogin) -> TokenResponse:
-    """ユーザーをログイン"""
+def authenticate_user(db: Session, email: str, password: str) -> TokenResponse:
+    """ユーザーを認証してトークンを返す（共通認証ロジック）"""
     # ユーザーを検索
-    user = db.query(User).filter(User.email == login_data.email).first()
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -69,7 +69,7 @@ def login_user(db: Session, login_data: UserLogin) -> TokenResponse:
         )
     
     # パスワードを検証
-    if not verify_password(login_data.password, user.password_hash):
+    if not verify_password(password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="メールアドレスまたはパスワードが正しくありません"
@@ -87,4 +87,9 @@ def login_user(db: Session, login_data: UserLogin) -> TokenResponse:
         token_type="bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
+
+
+def login_user(db: Session, login_data: UserLogin) -> TokenResponse:
+    """ユーザーをログイン（JSON リクエスト用）"""
+    return authenticate_user(db, login_data.email, login_data.password)
 
