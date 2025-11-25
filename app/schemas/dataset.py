@@ -4,12 +4,17 @@ from uuid import UUID
 from typing import Optional
 
 
+class DatasetCreate(BaseModel):
+    """データセット作成リクエスト"""
+    name: str
+    description: Optional[str] = None
+
+
 class DatasetSummary(BaseModel):
     """データセットサマリ"""
-    dataset_id: UUID
+    dataset_id: str  # UUIDを文字列として扱う（SQLite互換性のため）
     name: str
-    rows: int
-    columns: int
+    description: Optional[str] = None
     created_at: datetime
     
     class Config:
