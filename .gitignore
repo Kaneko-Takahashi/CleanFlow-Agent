@@ -205,3 +205,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ローカルのSQLite DBはGit管理から除外
+cleanflow.db
