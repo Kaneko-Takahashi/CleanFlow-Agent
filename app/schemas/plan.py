@@ -17,6 +17,7 @@ class PlanStep(BaseModel):
 
 class PlanCreate(BaseModel):
     """プラン作成リクエスト"""
+    dataset_id: str  # 関連するデータセットID
     task_type: str  # classification, regression, clustering
     target_column: Optional[str] = None
     plan_name: Optional[str] = None
@@ -24,8 +25,8 @@ class PlanCreate(BaseModel):
 
 class PlanResponse(BaseModel):
     """プランレスポンス"""
-    plan_id: UUID
-    dataset_id: UUID
+    plan_id: str  # UUIDを文字列として扱う（SQLite互換性のため）
+    dataset_id: str
     task_type: str
     target_column: Optional[str]
     name: Optional[str]
@@ -38,9 +39,9 @@ class PlanResponse(BaseModel):
 
 class PlanSummary(BaseModel):
     """プランサマリ"""
-    plan_id: UUID
+    plan_id: str  # UUIDを文字列として扱う（SQLite互換性のため）
     name: Optional[str]
-    dataset_id: UUID
+    dataset_id: str
     task_type: str
     created_at: datetime
     
