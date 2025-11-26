@@ -1,27 +1,12 @@
-# ============================================================
-# Claude Code - GitHub Actions ワークフロー
-# ============================================================
-# このワークフローは以下のイベントで動作します:
-#   - issue_comment: Issue へのコメント作成時
-#   - pull_request_review_comment: PR レビューコメント作成時
-#   - issues: Issue のオープン時、またはアサイン時
-#   - pull_request_review: PR レビュー送信時
-#
-# if 条件の説明:
-#   コメント本文、Issue 本文/タイトル、またはレビュー本文に
-#   「@claude」という文字列が含まれている場合のみ実行されます。
-#   これにより、Claude を明示的に呼び出したい時だけ動作します。
-# ============================================================
-
 name: Claude Code
 
 on:
   issue_comment:
     types: [created]
+  issues:
+    types: [opened]
   pull_request_review_comment:
     types: [created]
-  issues:
-    types: [opened, assigned]
   pull_request_review:
     types: [submitted]
 
@@ -29,29 +14,19 @@ jobs:
   claude:
     runs-on: ubuntu-latest
 
-    # @claude がコメント/本文/タイトル/レビューに含まれている場合のみ実行
-    if: |
-      contains(github.event.comment.body, '@claude') ||
-      contains(github.event.issue.body, '@claude') ||
-      contains(github.event.issue.title, '@claude') ||
-      contains(github.event.review.body, '@claude')
-
     permissions:
       contents: write
       pull-requests: write
       issues: write
-      id-token: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+      - uses: actions/checkout@v4
 
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           trigger_phrase: "@claude"
-
