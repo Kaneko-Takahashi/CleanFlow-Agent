@@ -16,10 +16,14 @@ class Settings(BaseSettings):
     # CORS設定
     CORS_ORIGINS: list[str] = ["*"]
     
+    # LLM設定
+    ANTHROPIC_API_KEY: Optional[str] = None
+    LLM_MODEL: str = "claude-sonnet-4-20250514"
+    LLM_MAX_TOKENS: int = 4096
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
 
 
 settings = Settings()
-

@@ -1,6 +1,6 @@
+"""実行関連スキーマ"""
 from pydantic import BaseModel
 from datetime import datetime
-from uuid import UUID
 from typing import Optional, Any
 
 
@@ -9,12 +9,11 @@ class ExecutionSummary(BaseModel):
     rows: int
     columns: int
     missing_values: int
-    # その他の統計量は任意のJSONとして扱う
-    statistics: Optional[dict[str, Any]] = None
+    column_info: Optional[dict[str, Any]] = None
 
 
-class ExecutionStepLog(BaseModel):
-    """実行ステップログ"""
+class ExecutionStepLogResponse(BaseModel):
+    """実行ステップログレスポンス"""
     order: int
     name: str
     status: str  # success, failed
@@ -27,14 +26,27 @@ class ExecutionStepLog(BaseModel):
 
 class ExecutionResponse(BaseModel):
     """実行レスポンス"""
-    execution_id: UUID
-    plan_id: UUID
+    execution_id: str
+    plan_id: str
     status: str  # pending, running, completed, failed
-    before: ExecutionSummary
-    after: Optional[ExecutionSummary] = None
-    steps: list[ExecutionStepLog]
+    before_summary: Optional[ExecutionSummary] = None
+    after_summary: Optional[ExecutionSummary] = None
+    step_logs: list[ExecutionStepLogResponse] = []
+    execution_time: Optional[float] = None
+    error_message: Optional[str] = None
     created_at: datetime
+    completed_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
 
+
+class ExecutionListResponse(BaseModel):
+    """実行履歴一覧レスポンス"""
+    executions: list[ExecutionResponse]
+    total: int
+
+
+class ExecuteRequest(BaseModel):
+    """実行リクエスト"""
+    csv_data: Optional[str] = None  # CSVデータ（オプション）

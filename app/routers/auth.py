@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+"""認証ルーター"""
+from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.auth import UserRegister, UserLogin, TokenResponse
-from app.schemas.user import UserResponse
-from app.core.security import get_current_user
+from app.dependencies.auth import get_current_user
 from app.services.auth_service import register_user, login_user, authenticate_user
+from app.schemas.responses import ApiResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -19,14 +20,14 @@ def register(
 ):
     """ユーザー登録"""
     user = register_user(db, user_data)
-    return {
-        "data": {
+    return ApiResponse.success(
+        data={
             "user_id": str(user.user_id),
             "email": user.email,
             "created_at": user.created_at.isoformat()
         },
-        "message": "User registered successfully"
-    }
+        message="User registered successfully"
+    ).model_dump()
 
 
 @router.post("/login", response_model=dict)
@@ -36,14 +37,14 @@ def login(
 ):
     """ログイン（JSON リクエスト用）"""
     token_response = login_user(db, login_data)
-    return {
-        "data": {
+    return ApiResponse.success(
+        data={
             "access_token": token_response.access_token,
             "token_type": token_response.token_type,
             "expires_in": token_response.expires_in
         },
-        "message": "Login successful"
-    }
+        message="Login successful"
+    ).model_dump()
 
 
 @router.post("/token", response_model=TokenResponse)
@@ -52,7 +53,6 @@ def token(
     db: Session = Depends(get_db)
 ):
     """OAuth2 トークン取得（Swagger Authorize 用）"""
-    # form_data.username を email として扱う
     token_response = authenticate_user(db, form_data.username, form_data.password)
     return token_response
 
@@ -62,12 +62,10 @@ def get_current_user_info(
     current_user: User = Depends(get_current_user)
 ):
     """現在のユーザー情報を取得"""
-    return {
-        "data": {
+    return ApiResponse.success(
+        data={
             "user_id": str(current_user.id),
             "email": current_user.email,
             "created_at": current_user.created_at.isoformat()
-        },
-        "message": "Success"
-    }
-
+        }
+    ).model_dump()
