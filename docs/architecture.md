@@ -10,7 +10,7 @@ CleanFlow Agent は、FastAPI ベースの RESTful API サーバーとして実�
 
 #### エントリーポイント
 
-- `main.py`: FastAPI アプリケーションの初期化、ミドルウェア設定、ルータの登録
+- `app/main.py`: FastAPI アプリケーションの初期化、ミドルウェア設定、ルータの登録、例外ハンドラの設定
 
 #### ミドルウェア
 
@@ -18,226 +18,255 @@ CleanFlow Agent は、FastAPI ベースの RESTful API サーバーとして実�
 - リクエストログ記録
 - エラーハンドリング
 
-### 2. ルータ層（routers/）
+#### 例外ハンドラ
+
+- `ResourceNotFoundException` → 404 Not Found
+- `UnauthorizedAccessException` → 403 Forbidden
+- `ValidationException` → 400 Bad Request
+- `DuplicateResourceException` → 400 Bad Request
+
+### 2. ルータ層（app/routers/）
 
 #### `routers/auth.py`
 
 - 認証関連のエンドポイント
   - `POST /auth/register`: ユーザー登録
-  - `POST /auth/login`: ログイン
+  - `POST /auth/login`: ログイン（JSON形式）
+  - `POST /auth/token`: OAuth2トークン取得（Swagger用）
   - `GET /auth/me`: 現在のユーザー情報取得
-- 依存関係: `get_current_user`（JWT トークン検証）
+- 依存関係: `dependencies.auth.get_current_user`（JWT トークン検証）
 
 #### `routers/datasets.py`
 
 - データセット関連のエンドポイント
-  - `POST /datasets`: CSV アップロード
+  - `POST /datasets`: データセット作成
   - `GET /datasets`: データセット一覧
-  - `GET /datasets/{dataset_id}`: データセット詳細
-  - `GET /datasets/{dataset_id}/profile`: プロファイル取得
-  - `DELETE /datasets/{dataset_id}`: データセット削除
-- 依存関係: `get_current_user`（認証必須）
+- 依存関係: `dependencies.auth.get_current_user`（認証必須）
 
 #### `routers/plans.py`
 
 - 前処理プラン関連のエンドポイント
-  - `POST /datasets/{dataset_id}/plan`: プラン生成
+  - `POST /plans`: プラン作成
   - `GET /plans`: プラン一覧
-  - `GET /plans/{plan_id}`: プラン詳細
-  - `POST /plans/{plan_id}/execute`: プラン実行
-  - `GET /executions/{execution_id}`: 実行結果詳細
-- 依存関係: `get_current_user`（認証必須）
+- 依存関係: `dependencies.auth.get_current_user`（認証必須）
 
-### 3. サービス層（services/）
+#### `routers/executions.py`
+
+- プラン実行関連のエンドポイント
+  - `POST /plans/{plan_id}/execute`: プラン実行
+  - `GET /plans/{plan_id}/executions`: プランの実行履歴一覧
+  - `GET /executions/{execution_id}`: 実行結果詳細
+- 依存関係: `dependencies.auth.get_current_user`（認証必須）
+
+#### `routers/profiling.py`
+
+- データプロファイリング関連のエンドポイント
+  - `POST /profiling/analyze`: CSVデータのプロファイリング
+- 依存関係: `dependencies.auth.get_current_user`（認証必須）
+
+### 3. 依存性注入層（app/dependencies/）
+
+#### `dependencies/auth.py`
+
+- **機能**:
+  - `get_current_user`: JWT トークンからユーザーを取得
+  - OAuth2スキーム定義
+- **依存**: `repositories.user_repository`, `core.security`
+
+### 4. サービス層（app/services/）
 
 #### `services/auth_service.py`
 
 - **機能**:
   - ユーザー登録処理
-  - パスワードハッシュ化（bcrypt）
   - パスワード検証
   - JWT トークン発行
-  - JWT トークン検証
-- **依存**: `repositories.user_repository`
+- **依存**: `repositories.user_repository`, `core.security`
+- **例外**: `DuplicateResourceException`, `ValidationException`, `UnauthorizedAccessException`
 
 #### `services/dataset_service.py`
 
 - **機能**:
-  - CSV ファイルの保存
-  - データセットの読み込み（pandas）
-  - データプロファイルの計算
-  - ファイル削除
-- **依存**: `repositories.dataset_repository`, `repositories.column_profile_repository`
+  - データセット一覧取得
+  - データセット作成
+- **依存**: `repositories.dataset_repository`
 
 #### `services/plan_service.py`
 
 - **機能**:
-  - LLM へのプロンプト送信
-  - 生成された JSON プランのバリデーション
-  - プランの保存
-- **依存**: `repositories.plan_repository`, `repositories.plan_step_repository`, `cleanflow_agent.llm_client`
+  - プラン一覧取得
+  - プラン作成（データセット所有権検証付き）
+- **依存**: `repositories.plan_repository`, `repositories.dataset_repository`
+- **例外**: `ResourceNotFoundException`, `UnauthorizedAccessException`
 
 #### `services/execution_service.py`
 
 - **機能**:
-  - プランの各ステップを順次実行
-  - コードスニペットの安全な実行（sandbox 環境）
+  - プランの実行（各ステップを順次実行）
   - Before/After サマリの計算
   - 実行ログの記録
-- **依存**: `repositories.execution_repository`, `repositories.execution_step_log_repository`, `services.dataset_service`
+  - 実行履歴の取得
+- **依存**: `repositories.execution_repository`, `repositories.plan_repository`
+- **例外**: `ResourceNotFoundException`
 
-### 4. リポジトリ層（repositories/）
+#### `services/profiling_service.py`
+
+- **機能**:
+  - CSVデータのプロファイリング
+  - 各列の統計情報計算（欠損値、ユニーク値、分布等）
+  - 外れ値検出（IQR法）
+  - データ品質問題の検出
+
+### 5. リポジトリ層（app/repositories/）
 
 #### `repositories/user_repository.py`
 
 - ユーザー情報の CRUD 操作
-- SQLite クエリ実行
+- `find_by_id`, `find_by_email`, `create`, `exists_by_email`
 
 #### `repositories/dataset_repository.py`
 
 - データセット情報の CRUD 操作
-
-#### `repositories/column_profile_repository.py`
-
-- 列プロファイル情報の CRUD 操作
+- `find_by_user_id`, `find_by_id`, `find_by_id_and_user`, `create`, `delete`
 
 #### `repositories/plan_repository.py`
 
 - 前処理プラン情報の CRUD 操作
-
-#### `repositories/plan_step_repository.py`
-
-- プランステップ情報の CRUD 操作
+- `find_by_user_id`, `find_by_id`, `find_by_id_and_user`, `create`, `delete`
 
 #### `repositories/execution_repository.py`
 
 - 実行履歴情報の CRUD 操作
+- `find_by_id`, `find_by_plan_id`, `create`, `update`, `add_step_log`
 
-#### `repositories/execution_step_log_repository.py`
+### 6. LLM エージェント層（app/agents/）
 
-- 実行ステップログ情報の CRUD 操作
+#### `agents/cleanflow_agent.py`
 
-#### `repositories/database.py`
+- **機能**:
+  - LLM（Anthropic Claude）を使用した前処理プラン生成
+  - システムプロンプトとユーザープロンプトの構築
+  - レスポンスのJSONパース
+  - APIキー未設定時のダミープラン生成（フォールバック）
+- **設定**: `ANTHROPIC_API_KEY`, `LLM_MODEL`, `LLM_MAX_TOKENS`
 
-- データベース接続管理
-- セッション管理
-- マイグレーション（Alembic 等を使用）
+### 7. 例外層（app/exceptions/）
 
-### 5. LLM エージェント層（cleanflow_agent/）
+#### `exceptions/domain_exceptions.py`
 
-#### `cleanflow_agent/llm_client.py`
+- `DomainException`: 基底例外
+- `ResourceNotFoundException`: リソースが見つからない（404）
+- `UnauthorizedAccessException`: 権限がない（403）
+- `ValidationException`: バリデーションエラー（400）
+- `DuplicateResourceException`: リソースの重複（400）
 
-- LLM API（OpenAI 等）への接続
-- プロンプトの送信
-- レスポンスの取得
+### 8. スキーマ層（app/schemas/）
 
-#### `cleanflow_agent/prompt_builder.py`
+#### 共通レスポンス
 
-- System Prompt と User Prompt の構築
-- データプロファイル情報のフォーマット
+- `schemas/responses.py`: `ApiResponse`, `ListData`
 
-#### `cleanflow_agent/response_parser.py`
+#### 認証関連
 
-- LLM レスポンスの JSON パース
-- バリデーション
+- `schemas/auth.py`: `UserRegister`, `UserLogin`, `TokenResponse`
+- `schemas/user.py`: `UserResponse`
 
-### 6. モデル層（models/）
+#### データセット関連
 
-#### Pydantic モデル（API リクエスト/レスポンス）
+- `schemas/dataset.py`: `DatasetCreate`, `DatasetSummary`, `DatasetListResponse`
 
-- `models/schemas/auth.py`: 認証関連スキーマ
-- `models/schemas/dataset.py`: データセット関連スキーマ
-- `models/schemas/plan.py`: プラン関連スキーマ
-- `models/schemas/execution.py`: 実行関連スキーマ
+#### プラン関連
 
-#### SQLAlchemy モデル（データベース）
+- `schemas/plan.py`: `PlanCreate`, `PlanStep`, `PlanResponse`, `PlanSummary`, `PlanListResponse`
 
-- `models/database/user.py`: User モデル
-- `models/database/dataset.py`: Dataset モデル
-- `models/database/column_profile.py`: ColumnProfile モデル
-- `models/database/plan.py`: Plan モデル
-- `models/database/plan_step.py`: PlanStep モデル
-- `models/database/execution.py`: Execution モデル
-- `models/database/execution_step_log.py`: ExecutionStepLog モデル
+#### 実行関連
 
-### 7. ユーティリティ層（utils/）
+- `schemas/execution.py`: `ExecutionResponse`, `ExecutionSummary`, `ExecutionStepLogResponse`, `ExecuteRequest`, `ExecutionListResponse`
 
-#### `utils/security.py`
+#### プロファイリング関連
 
-- パスワードハッシュ化・検証
+- `schemas/profiling.py`: `DatasetProfile`, `ColumnProfile`, `DataQualityIssue`, `ProfileRequest`
+
+### 9. モデル層（app/models/）
+
+- `models/user.py`: User モデル
+- `models/dataset.py`: Dataset モデル
+- `models/plan.py`: Plan, PlanStep モデル
+- `models/execution.py`: Execution, ExecutionStepLog モデル
+
+### 10. コア層（app/core/）
+
+#### `core/config.py`
+
+- アプリケーション設定（環境変数から読み込み）
+- `DATABASE_URL`, `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`
+- `ANTHROPIC_API_KEY`, `LLM_MODEL`, `LLM_MAX_TOKENS`
+- `CORS_ORIGINS`
+
+#### `core/security.py`
+
+- パスワードハッシュ化（bcrypt）
+- パスワード検証
 - JWT トークン生成・検証
 
-#### `utils/file_handler.py`
-
-- ファイルアップロード処理
-- ファイル削除処理
-- ファイルパス管理
-
-#### `utils/validators.py`
-
-- データバリデーション
-- ファイル形式チェック
-
-## ディレクトリ構造
+## ディレクトリ構造（実装済み）
 
 ```
-cleanflow_agent/
-├── main.py
-├── config.py
+app/
+├── __init__.py
+├── main.py                    # アプリケーションエントリーポイント
+├── agents/
+│   ├── __init__.py
+│   └── cleanflow_agent.py     # LLM連携プラン生成
+├── core/
+│   ├── __init__.py
+│   ├── config.py              # 設定管理
+│   └── security.py            # セキュリティユーティリティ
+├── db/
+│   ├── __init__.py
+│   ├── base.py                # SQLAlchemy Base
+│   └── session.py             # DBセッション管理
+├── dependencies/
+│   ├── __init__.py
+│   └── auth.py                # 認証依存性
+├── exceptions/
+│   ├── __init__.py
+│   └── domain_exceptions.py   # ドメイン例外
+├── models/
+│   ├── __init__.py
+│   ├── user.py
+│   ├── dataset.py
+│   ├── plan.py
+│   └── execution.py
+├── repositories/
+│   ├── __init__.py
+│   ├── user_repository.py
+│   ├── dataset_repository.py
+│   ├── plan_repository.py
+│   └── execution_repository.py
 ├── routers/
 │   ├── __init__.py
 │   ├── auth.py
 │   ├── datasets.py
-│   └── plans.py
-├── services/
+│   ├── plans.py
+│   ├── executions.py
+│   └── profiling.py
+├── schemas/
 │   ├── __init__.py
-│   ├── auth_service.py
-│   ├── dataset_service.py
-│   ├── plan_service.py
-│   └── execution_service.py
-├── repositories/
-│   ├── __init__.py
-│   ├── database.py
-│   ├── user_repository.py
-│   ├── dataset_repository.py
-│   ├── column_profile_repository.py
-│   ├── plan_repository.py
-│   ├── plan_step_repository.py
-│   ├── execution_repository.py
-│   └── execution_step_log_repository.py
-├── models/
-│   ├── __init__.py
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   ├── auth.py
-│   │   ├── dataset.py
-│   │   ├── plan.py
-│   │   └── execution.py
-│   └── database/
-│       ├── __init__.py
-│       ├── user.py
-│       ├── dataset.py
-│       ├── column_profile.py
-│       ├── plan.py
-│       ├── plan_step.py
-│       ├── execution.py
-│       └── execution_step_log.py
-├── cleanflow_agent/
-│   ├── __init__.py
-│   ├── llm_client.py
-│   ├── prompt_builder.py
-│   └── response_parser.py
-├── utils/
-│   ├── __init__.py
-│   ├── security.py
-│   ├── file_handler.py
-│   └── validators.py
-└── tests/
+│   ├── auth.py
+│   ├── dataset.py
+│   ├── execution.py
+│   ├── plan.py
+│   ├── profiling.py
+│   ├── responses.py
+│   └── user.py
+└── services/
     ├── __init__.py
-    ├── test_auth_service.py
-    ├── test_dataset_service.py
-    ├── test_plan_service.py
-    └── test_execution_service.py
+    ├── auth_service.py
+    ├── dataset_service.py
+    ├── execution_service.py
+    ├── plan_service.py
+    └── profiling_service.py
 ```
 
 ## データフロー
@@ -245,57 +274,44 @@ cleanflow_agent/
 ### 1. ユーザー登録・ログインフロー
 
 ```
-1. クライアント → POST /auth/register
+1. クライアント → POST /api/v1/auth/register
 2. routers/auth.py → services/auth_service.py
 3. auth_service → repositories/user_repository.py
 4. user_repository → SQLite（usersテーブルにINSERT）
-5. auth_service → JWTトークン生成
-6. レスポンス返却（トークン含む）
+5. レスポンス返却（ApiResponse形式）
 ```
 
-### 2. CSV アップロード・プロファイル生成フロー
+### 2. プラン実行フロー
 
 ```
-1. クライアント → POST /datasets (multipart/form-data)
-2. routers/datasets.py → services/dataset_service.py
-3. dataset_service → utils/file_handler.py（ファイル保存）
-4. dataset_service → pandas（CSV読み込み）
-5. dataset_service → プロファイル計算
-6. dataset_service → repositories/dataset_repository.py（DB保存）
-7. dataset_service → repositories/column_profile_repository.py（プロファイル保存）
-8. レスポンス返却
-```
-
-### 3. 前処理プラン生成フロー
-
-```
-1. クライアント → POST /datasets/{dataset_id}/plan
-2. routers/plans.py → services/plan_service.py
-3. plan_service → services/dataset_service.py（プロファイル取得）
-4. plan_service → cleanflow_agent/prompt_builder.py（プロンプト構築）
-5. plan_service → cleanflow_agent/llm_client.py（LLM API呼び出し）
-6. plan_service → cleanflow_agent/response_parser.py（JSONパース・バリデーション）
-7. plan_service → repositories/plan_repository.py（プラン保存）
-8. plan_service → repositories/plan_step_repository.py（ステップ保存）
-9. レスポンス返却
-```
-
-### 4. プラン実行フロー
-
-```
-1. クライアント → POST /plans/{plan_id}/execute
-2. routers/plans.py → services/execution_service.py
-3. execution_service → repositories/plan_repository.py（プラン取得）
-4. execution_service → services/dataset_service.py（データセット読み込み）
+1. クライアント → POST /api/v1/plans/{plan_id}/execute
+2. routers/executions.py → services/execution_service.py
+3. execution_service → repositories/plan_repository.py（プラン取得・権限確認）
+4. execution_service → Execution作成（status: running）
 5. execution_service → Beforeサマリ計算
 6. execution_service → 各ステップを順次実行:
-   a. コードスニペットを安全に実行（sandbox環境）
-   b. 実行結果をログに記録
+   a. コードスニペットを exec() で実行
+   b. ExecutionStepLog を記録
    c. エラー発生時は中断
 7. execution_service → Afterサマリ計算
-8. execution_service → repositories/execution_repository.py（実行履歴保存）
-9. execution_service → repositories/execution_step_log_repository.py（ログ保存）
-10. レスポンス返却
+8. execution_service → Execution更新（status: completed/failed）
+9. レスポンス返却（ApiResponse形式）
+```
+
+### 3. データプロファイリングフロー
+
+```
+1. クライアント → POST /api/v1/profiling/analyze
+2. routers/profiling.py → services/profiling_service.py
+3. profiling_service → pandas（CSV読み込み）
+4. profiling_service → 各列のプロファイル計算:
+   - データ型判定
+   - 欠損値率
+   - ユニーク値数
+   - 数値列: 平均、標準偏差、四分位数、外れ値
+   - カテゴリ列: 頻度分布
+5. profiling_service → データ品質問題の検出
+6. レスポンス返却（ApiResponse形式）
 ```
 
 ## セキュリティ設計
@@ -305,48 +321,51 @@ cleanflow_agent/
 - JWT トークンは環境変数で管理されたシークレットキーで署名
 - トークン有効期限: 24 時間（設定可能）
 - パスワードは bcrypt でハッシュ化（salt rounds: 12）
+- 認証ロジックは `dependencies/auth.py` に集約
 
 ### データ分離
 
 - すべてのデータアクセスで user_id をチェック
-- リポジトリ層で WHERE 句に user_id 条件を必ず含める
+- リポジトリ層で `find_by_id_and_user` メソッドを提供
 
 ### コード実行の安全性
 
-- プランのコードスニペット実行は制限された環境で実行
-- 危険な操作（ファイルシステムアクセス、ネットワークアクセス等）を制限
-- タイムアウト設定（例: 30 秒）
+- プランのコードスニペット実行は `exec()` で実行
+- 実行環境に `df`（DataFrame）と `pd`（pandas）のみを渡す
+- 将来的にサンドボックス環境の強化を検討
 
 ## エラーハンドリング
 
-### エラーレスポンス形式
+### ドメイン例外からHTTPレスポンスへの変換
 
-- 統一されたエラーレスポンス形式（api_spec.md 参照）
-- 適切な HTTP ステータスコード
+| ドメイン例外 | HTTPステータス | 用途 |
+|-------------|---------------|------|
+| `ResourceNotFoundException` | 404 | リソースが見つからない |
+| `UnauthorizedAccessException` | 403 | アクセス権限がない |
+| `ValidationException` | 400 | バリデーションエラー |
+| `DuplicateResourceException` | 400 | リソースの重複 |
 
-### ログ記録
+### レスポンス形式
 
-- すべてのエラーをログに記録
-- スタックトレースを含める
-- ログレベル: DEBUG, INFO, WARNING, ERROR
+```json
+{
+  "data": null,
+  "message": "エラーメッセージ"
+}
+```
 
-## パフォーマンス考慮事項
+## 環境変数
 
-### データベース
-
-- インデックス設定（user_id, dataset_id, plan_id 等）
-- クエリの最適化
-
-### ファイル処理
-
-- 大きな CSV ファイルはチャンク読み込みを検討
-- 非同期処理の検討（将来拡張）
-
-### LLM API 呼び出し
-
-- タイムアウト設定
-- リトライロジック（将来拡張）
-- レート制限対応（将来拡張）
+| 変数名 | 説明 | デフォルト値 |
+|--------|------|-------------|
+| `DATABASE_URL` | データベース接続文字列 | `sqlite:///./cleanflow.db` |
+| `JWT_SECRET_KEY` | JWT署名用シークレット | （要設定） |
+| `JWT_ALGORITHM` | JWTアルゴリズム | `HS256` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | トークン有効期限（分） | `1440`（24時間） |
+| `ANTHROPIC_API_KEY` | Anthropic APIキー | `None`（未設定時はダミー生成） |
+| `LLM_MODEL` | 使用するLLMモデル | `claude-sonnet-4-20250514` |
+| `LLM_MAX_TOKENS` | LLMの最大トークン数 | `4096` |
+| `CORS_ORIGINS` | CORS許可オリジン | `["*"]` |
 
 ## 依存関係管理
 
@@ -357,14 +376,6 @@ cleanflow_agent/
 - pandas: データ処理
 - scikit-learn: 機械学習前処理
 - python-jose: JWT 処理
-- passlib: パスワードハッシュ化
-- openai: LLM API（または他の LLM ライブラリ）
-- pytest: テストフレームワーク
-
-### 環境変数
-
-- `DATABASE_URL`: データベース接続文字列
-- `JWT_SECRET_KEY`: JWT 署名用シークレット
-- `JWT_ALGORITHM`: JWT アルゴリズム（HS256）
-- `OPENAI_API_KEY`: OpenAI API キー（または他の LLM API キー）
-- `UPLOAD_DIR`: アップロードファイル保存ディレクトリ
+- bcrypt: パスワードハッシュ化
+- anthropic: Claude API クライアント
+- pydantic-settings: 設定管理

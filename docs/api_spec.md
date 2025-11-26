@@ -32,10 +32,8 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "エラーメッセージ"
-  }
+  "data": null,
+  "message": "エラーメッセージ"
 }
 ```
 
@@ -43,7 +41,7 @@ Authorization: Bearer <access_token>
 
 - `200`: 成功
 - `201`: 作成成功
-- `400`: バリデーションエラー
+- `400`: バリデーションエラー / リソース重複
 - `401`: 認証エラー（トークン無効・期限切れ）
 - `403`: 権限エラー（リソースへのアクセス権限なし）
 - `404`: リソースが見つからない
@@ -77,33 +75,9 @@ Authorization: Bearer <access_token>
 }
 ```
 
-#### エラーレスポンス例
-
-**400 Bad Request - メール重複**
-
-```json
-{
-  "error": {
-    "code": "EMAIL_ALREADY_EXISTS",
-    "message": "このメールアドレスは既に登録されています"
-  }
-}
-```
-
-**400 Bad Request - パスワード強度不足**
-
-```json
-{
-  "error": {
-    "code": "WEAK_PASSWORD",
-    "message": "パスワードは8文字以上である必要があります"
-  }
-}
-```
-
 ### POST /auth/login
 
-ログイン（JWT トークン取得）
+ログイン（JSON リクエスト用）
 
 #### リクエスト
 
@@ -127,16 +101,25 @@ Authorization: Bearer <access_token>
 }
 ```
 
-#### エラーレスポンス例
+### POST /auth/token
 
-**401 Unauthorized - 認証失敗**
+OAuth2 トークン取得（Swagger Authorize 用）
+
+#### リクエスト
+
+- Content-Type: `application/x-www-form-urlencoded`
+
+```
+username=user@example.com&password=securepassword123
+```
+
+#### レスポンス（200 OK）
 
 ```json
 {
-  "error": {
-    "code": "INVALID_CREDENTIALS",
-    "message": "メールアドレスまたはパスワードが正しくありません"
-  }
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer",
+  "expires_in": 86400
 }
 ```
 
@@ -163,73 +146,7 @@ Authorization: Bearer <access_token>
 }
 ```
 
-#### エラーレスポンス例
-
-**401 Unauthorized - トークン無効**
-
-```json
-{
-  "error": {
-    "code": "INVALID_TOKEN",
-    "message": "トークンが無効または期限切れです"
-  }
-}
-```
-
 ## データセット関連エンドポイント
-
-### POST /datasets
-
-CSV ファイルアップロード
-
-#### リクエスト
-
-- Content-Type: `multipart/form-data`
-- 認証: 必須
-
-```
-file: <CSVファイル>
-name: "my_dataset" (オプション、デフォルトはファイル名)
-```
-
-#### レスポンス（201 Created）
-
-```json
-{
-  "data": {
-    "dataset_id": "456e7890-e89b-12d3-a456-426614174001",
-    "name": "my_dataset",
-    "rows": 1000,
-    "columns": 10,
-    "created_at": "2024-01-01T00:00:00Z"
-  },
-  "message": "Dataset uploaded successfully"
-}
-```
-
-#### エラーレスポンス例
-
-**400 Bad Request - ファイル形式エラー**
-
-```json
-{
-  "error": {
-    "code": "INVALID_FILE_FORMAT",
-    "message": "CSVファイルのみアップロード可能です"
-  }
-}
-```
-
-**400 Bad Request - ファイルサイズ超過**
-
-```json
-{
-  "error": {
-    "code": "FILE_TOO_LARGE",
-    "message": "ファイルサイズは100MB以下である必要があります"
-  }
-}
-```
 
 ### GET /datasets
 
@@ -250,8 +167,7 @@ Authorization: Bearer <access_token>
       {
         "dataset_id": "456e7890-e89b-12d3-a456-426614174001",
         "name": "my_dataset",
-        "rows": 1000,
-        "columns": 10,
+        "description": "サンプルデータセット",
         "created_at": "2024-01-01T00:00:00Z"
       }
     ],
@@ -261,133 +177,9 @@ Authorization: Bearer <access_token>
 }
 ```
 
-### GET /datasets/{dataset_id}
+### POST /datasets
 
-データセット詳細取得
-
-#### リクエストヘッダ
-
-```
-Authorization: Bearer <access_token>
-```
-
-#### レスポンス（200 OK）
-
-```json
-{
-  "data": {
-    "dataset_id": "456e7890-e89b-12d3-a456-426614174001",
-    "name": "my_dataset",
-    "rows": 1000,
-    "columns": 10,
-    "file_path": "/data/datasets/456e7890-e89b-12d3-a456-426614174001.csv",
-    "created_at": "2024-01-01T00:00:00Z"
-  },
-  "message": "Success"
-}
-```
-
-#### エラーレスポンス例
-
-**404 Not Found**
-
-```json
-{
-  "error": {
-    "code": "DATASET_NOT_FOUND",
-    "message": "データセットが見つかりません"
-  }
-}
-```
-
-**403 Forbidden**
-
-```json
-{
-  "error": {
-    "code": "ACCESS_DENIED",
-    "message": "このデータセットへのアクセス権限がありません"
-  }
-}
-```
-
-### GET /datasets/{dataset_id}/profile
-
-データプロファイル取得
-
-#### リクエストヘッダ
-
-```
-Authorization: Bearer <access_token>
-```
-
-#### レスポンス（200 OK）
-
-```json
-{
-  "data": {
-    "dataset_id": "456e7890-e89b-12d3-a456-426614174001",
-    "columns": [
-      {
-        "name": "age",
-        "dtype": "int64",
-        "missing_count": 5,
-        "missing_rate": 0.005,
-        "unique_count": 45,
-        "statistics": {
-          "mean": 35.5,
-          "median": 34.0,
-          "std": 12.3,
-          "min": 18,
-          "max": 80
-        }
-      },
-      {
-        "name": "category",
-        "dtype": "object",
-        "missing_count": 0,
-        "missing_rate": 0.0,
-        "unique_count": 3,
-        "statistics": {
-          "value_counts": {
-            "A": 400,
-            "B": 350,
-            "C": 250
-          }
-        }
-      }
-    ]
-  },
-  "message": "Success"
-}
-```
-
-### DELETE /datasets/{dataset_id}
-
-データセット削除
-
-#### リクエストヘッダ
-
-```
-Authorization: Bearer <access_token>
-```
-
-#### レスポンス（200 OK）
-
-```json
-{
-  "data": {
-    "dataset_id": "456e7890-e89b-12d3-a456-426614174001"
-  },
-  "message": "Dataset deleted successfully"
-}
-```
-
-## 前処理プラン関連エンドポイント
-
-### POST /datasets/{dataset_id}/plan
-
-前処理プラン生成
+データセット作成
 
 #### リクエストヘッダ
 
@@ -399,9 +191,8 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "task_type": "classification",
-  "target_column": "target",
-  "plan_name": "my_plan" (オプション)
+  "name": "my_dataset",
+  "description": "サンプルデータセット"
 }
 ```
 
@@ -410,99 +201,16 @@ Authorization: Bearer <access_token>
 ```json
 {
   "data": {
-    "plan_id": "789e0123-e89b-12d3-a456-426614174002",
     "dataset_id": "456e7890-e89b-12d3-a456-426614174001",
-    "task_type": "classification",
-    "target_column": "target",
-    "name": "my_plan",
-    "steps": [
-      {
-        "order": 1,
-        "name": "欠損値補完（数値列）",
-        "description": "数値列の欠損値を平均値で補完",
-        "code_snippet": "df['age'].fillna(df['age'].mean(), inplace=True)"
-      },
-      {
-        "order": 2,
-        "name": "カテゴリ変数エンコード",
-        "description": "カテゴリ変数をOne-Hot Encoding",
-        "code_snippet": "df = pd.get_dummies(df, columns=['category'])"
-      }
-    ],
+    "name": "my_dataset",
+    "description": "サンプルデータセット",
     "created_at": "2024-01-01T00:00:00Z"
   },
-  "message": "Plan generated successfully"
+  "message": "Dataset created successfully"
 }
 ```
 
-#### エラーレスポンス例
-
-**400 Bad Request - 無効なタスク種別**
-
-```json
-{
-  "error": {
-    "code": "INVALID_TASK_TYPE",
-    "message": "タスク種別は classification, regression, clustering のいずれかである必要があります"
-  }
-}
-```
-
-**400 Bad Request - ターゲット列が見つからない**
-
-```json
-{
-  "error": {
-    "code": "TARGET_COLUMN_NOT_FOUND",
-    "message": "指定されたターゲット列がデータセットに存在しません"
-  }
-}
-```
-
-**500 Internal Server Error - LLM 生成失敗**
-
-```json
-{
-  "error": {
-    "code": "PLAN_GENERATION_FAILED",
-    "message": "前処理プランの生成に失敗しました"
-  }
-}
-```
-
-### GET /plans/{plan_id}
-
-前処理プラン詳細取得
-
-#### リクエストヘッダ
-
-```
-Authorization: Bearer <access_token>
-```
-
-#### レスポンス（200 OK）
-
-```json
-{
-  "data": {
-    "plan_id": "789e0123-e89b-12d3-a456-426614174002",
-    "dataset_id": "456e7890-e89b-12d3-a456-426614174001",
-    "task_type": "classification",
-    "target_column": "target",
-    "name": "my_plan",
-    "steps": [
-      {
-        "order": 1,
-        "name": "欠損値補完（数値列）",
-        "description": "数値列の欠損値を平均値で補完",
-        "code_snippet": "df['age'].fillna(df['age'].mean(), inplace=True)"
-      }
-    ],
-    "created_at": "2024-01-01T00:00:00Z"
-  },
-  "message": "Success"
-}
-```
+## 前処理プラン関連エンドポイント
 
 ### GET /plans
 
@@ -534,9 +242,113 @@ Authorization: Bearer <access_token>
 }
 ```
 
+### POST /plans
+
+前処理プラン作成
+
+#### リクエストヘッダ
+
+```
+Authorization: Bearer <access_token>
+```
+
+#### リクエストボディ
+
+```json
+{
+  "dataset_id": "456e7890-e89b-12d3-a456-426614174001",
+  "task_type": "classification",
+  "target_column": "target",
+  "plan_name": "my_plan"
+}
+```
+
+#### レスポンス（201 Created）
+
+```json
+{
+  "data": {
+    "plan_id": "789e0123-e89b-12d3-a456-426614174002",
+    "name": "my_plan",
+    "dataset_id": "456e7890-e89b-12d3-a456-426614174001",
+    "task_type": "classification",
+    "created_at": "2024-01-01T00:00:00Z"
+  },
+  "message": "Plan created successfully"
+}
+```
+
+## プラン実行関連エンドポイント
+
 ### POST /plans/{plan_id}/execute
 
 前処理プラン実行
+
+#### リクエストヘッダ
+
+```
+Authorization: Bearer <access_token>
+```
+
+#### リクエストボディ（オプション）
+
+```json
+{
+  "csv_data": "col1,col2,col3\n1,2,3\n4,5,6"
+}
+```
+
+※ `csv_data` を省略した場合はサンプルデータで実行
+
+#### レスポンス（201 Created）
+
+```json
+{
+  "data": {
+    "execution_id": "012e3456-e89b-12d3-a456-426614174003",
+    "plan_id": "789e0123-e89b-12d3-a456-426614174002",
+    "status": "completed",
+    "before_summary": {
+      "rows": 100,
+      "columns": 5,
+      "missing_values": 10,
+      "column_info": {
+        "age": {
+          "dtype": "int64",
+          "missing": 0,
+          "unique": 45,
+          "mean": 35.5,
+          "std": 12.3
+        }
+      }
+    },
+    "after_summary": {
+      "rows": 100,
+      "columns": 5,
+      "missing_values": 0,
+      "column_info": { ... }
+    },
+    "step_logs": [
+      {
+        "order": 1,
+        "name": "欠損値の処理",
+        "status": "success",
+        "execution_time": 0.05,
+        "error_message": null
+      }
+    ],
+    "execution_time": 0.15,
+    "error_message": null,
+    "created_at": "2024-01-01T00:00:00Z",
+    "completed_at": "2024-01-01T00:00:01Z"
+  },
+  "message": "Plan executed successfully"
+}
+```
+
+### GET /plans/{plan_id}/executions
+
+プランの実行履歴一覧取得
 
 #### リクエストヘッダ
 
@@ -549,53 +361,22 @@ Authorization: Bearer <access_token>
 ```json
 {
   "data": {
-    "execution_id": "012e3456-e89b-12d3-a456-426614174003",
-    "plan_id": "789e0123-e89b-12d3-a456-426614174002",
-    "status": "completed",
-    "before": {
-      "rows": 1000,
-      "columns": 10,
-      "missing_values": 50
-    },
-    "after": {
-      "rows": 1000,
-      "columns": 12,
-      "missing_values": 0
-    },
-    "steps": [
+    "executions": [
       {
-        "order": 1,
-        "name": "欠損値補完（数値列）",
-        "status": "success",
-        "execution_time": 0.05
-      },
-      {
-        "order": 2,
-        "name": "カテゴリ変数エンコード",
-        "status": "success",
-        "execution_time": 0.12
+        "execution_id": "012e3456-e89b-12d3-a456-426614174003",
+        "plan_id": "789e0123-e89b-12d3-a456-426614174002",
+        "status": "completed",
+        "before_summary": { ... },
+        "after_summary": { ... },
+        "step_logs": [ ... ],
+        "execution_time": 0.15,
+        "created_at": "2024-01-01T00:00:00Z",
+        "completed_at": "2024-01-01T00:00:01Z"
       }
     ],
-    "created_at": "2024-01-01T00:00:00Z"
+    "total": 1
   },
-  "message": "Execution completed successfully"
-}
-```
-
-#### エラーレスポンス例
-
-**400 Bad Request - 実行エラー**
-
-```json
-{
-  "error": {
-    "code": "EXECUTION_FAILED",
-    "message": "プランの実行中にエラーが発生しました",
-    "details": {
-      "step_order": 2,
-      "error_message": "KeyError: 'category'"
-    }
-  }
+  "message": "Success"
 }
 ```
 
@@ -617,11 +398,147 @@ Authorization: Bearer <access_token>
     "execution_id": "012e3456-e89b-12d3-a456-426614174003",
     "plan_id": "789e0123-e89b-12d3-a456-426614174002",
     "status": "completed",
-    "before": { ... },
-    "after": { ... },
-    "steps": [ ... ],
-    "created_at": "2024-01-01T00:00:00Z"
+    "before_summary": { ... },
+    "after_summary": { ... },
+    "step_logs": [ ... ],
+    "execution_time": 0.15,
+    "error_message": null,
+    "created_at": "2024-01-01T00:00:00Z",
+    "completed_at": "2024-01-01T00:00:01Z"
   },
   "message": "Success"
+}
+```
+
+## データプロファイリング関連エンドポイント
+
+### POST /profiling/analyze
+
+CSVデータのプロファイリング
+
+#### リクエストヘッダ
+
+```
+Authorization: Bearer <access_token>
+```
+
+#### リクエストボディ
+
+```json
+{
+  "csv_data": "age,income,category,score,target\n25,50000,A,75.5,1\n30,60000,B,82.3,0\n..."
+}
+```
+
+#### レスポンス（200 OK）
+
+```json
+{
+  "data": {
+    "rows": 100,
+    "columns": 5,
+    "missing_values": 10,
+    "missing_rate": 0.02,
+    "numeric_columns": ["age", "income", "score"],
+    "categorical_columns": ["category", "target"],
+    "datetime_columns": [],
+    "column_profiles": {
+      "age": {
+        "dtype": "int64",
+        "dtype_category": "numeric",
+        "count": 100,
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique": 45,
+        "unique_rate": 0.45,
+        "mean": 35.5,
+        "std": 12.3,
+        "min": 18.0,
+        "max": 80.0,
+        "median": 34.0,
+        "q1": 25.0,
+        "q3": 45.0,
+        "outliers_count": 3,
+        "outliers_rate": 0.03
+      },
+      "category": {
+        "dtype": "object",
+        "dtype_category": "categorical",
+        "count": 100,
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique": 3,
+        "unique_rate": 0.03,
+        "top_values": {
+          "A": 40,
+          "B": 35,
+          "C": 25
+        }
+      }
+    },
+    "quality_issues": [
+      {
+        "type": "moderate_missing_rate",
+        "severity": "medium",
+        "column": "income",
+        "message": "カラム 'income' に 10.0% の欠損があります",
+        "suggestion": "補完方法を検討してください"
+      },
+      {
+        "type": "high_outliers",
+        "severity": "medium",
+        "column": "score",
+        "message": "カラム 'score' に 15.0% の外れ値があります",
+        "suggestion": "外れ値の処理を検討してください"
+      }
+    ]
+  },
+  "message": "Success"
+}
+```
+
+## エラーレスポンス例
+
+### 404 Not Found - リソースが見つからない
+
+```json
+{
+  "data": null,
+  "message": "Dataset not found: 456e7890-e89b-12d3-a456-426614174001"
+}
+```
+
+### 403 Forbidden - アクセス権限がない
+
+```json
+{
+  "data": null,
+  "message": "このデータセットへのアクセス権限がありません"
+}
+```
+
+### 400 Bad Request - バリデーションエラー
+
+```json
+{
+  "data": null,
+  "message": "パスワードは8文字以上である必要があります"
+}
+```
+
+### 400 Bad Request - リソース重複
+
+```json
+{
+  "data": null,
+  "message": "User already exists: user@example.com"
+}
+```
+
+### 401 Unauthorized - 認証エラー
+
+```json
+{
+  "detail": "認証情報を検証できませんでした"
 }
 ```
